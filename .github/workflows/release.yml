@@ -24,9 +24,13 @@ jobs:
       run: |
         cargo build --release
         cp target/release/librust_add_ffi.so ./librust_add_ffi.so
+        # 设置库路径
+        export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
     
     - name: Run Go tests
-      run: go test -v ./...
+      run: |
+        export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
+        go test -v ./...
     
     - name: Run Go build
       run: go build -v ./...
@@ -53,6 +57,8 @@ jobs:
         cargo build --release
         mkdir -p dist/linux
         cp target/release/librust_add_ffi.so dist/linux/
+        # 也复制到当前目录供测试使用
+        cp target/release/librust_add_ffi.so ./librust_add_ffi.so
         
         # macOS (需要交叉编译工具)
         rustup target add x86_64-apple-darwin

@@ -48,6 +48,9 @@ jobs:
         cargo build --release
         if [[ "$RUNNER_OS" == "Linux" ]]; then
           cp target/release/librust_add_ffi.so ./librust_add_ffi.so
+          # 确保动态库在系统路径中可以找到
+          sudo cp target/release/librust_add_ffi.so /usr/local/lib/
+          sudo ldconfig
         elif [[ "$RUNNER_OS" == "macOS" ]]; then
           cp target/release/librust_add_ffi.dylib ./librust_add_ffi.dylib
         fi
@@ -56,7 +59,14 @@ jobs:
       run: cargo test
     
     - name: Run Go tests
-      run: go test -v -race -coverprofile=coverage.out ./...
+      run: |
+        # 设置库路径环境变量
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
+        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+          export DYLD_LIBRARY_PATH=$PWD:$DYLD_LIBRARY_PATH
+        fi
+        go test -v -race -coverprofile=coverage.out ./...
     
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
