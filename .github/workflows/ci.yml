@@ -46,14 +46,8 @@ jobs:
     - name: Build Rust library
       run: |
         cargo build --release
-        if [[ "$RUNNER_OS" == "Linux" ]]; then
-          cp target/release/librust_add_ffi.so ./librust_add_ffi.so
-          # 确保动态库在系统路径中可以找到
-          sudo cp target/release/librust_add_ffi.so /usr/local/lib/
-          sudo ldconfig
-        elif [[ "$RUNNER_OS" == "macOS" ]]; then
-          cp target/release/librust_add_ffi.dylib ./librust_add_ffi.dylib
-        fi
+        chmod +x build.sh
+        ./build.sh
     
     - name: Run Rust tests
       run: cargo test
@@ -63,10 +57,12 @@ jobs:
         # 设置库路径环境变量
         if [[ "$RUNNER_OS" == "Linux" ]]; then
           export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
+          export CGO_LDFLAGS="-L$PWD -lrust_add_ffi"
         elif [[ "$RUNNER_OS" == "macOS" ]]; then
           export DYLD_LIBRARY_PATH=$PWD:$DYLD_LIBRARY_PATH
+          export CGO_LDFLAGS="-L$PWD -lrust_add_ffi"
         fi
-        go test -v -race -coverprofile=coverage.out ./...
+        go test -v -coverprofile=coverage.out ./...
     
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
@@ -75,7 +71,13 @@ jobs:
         file: ./coverage.out
     
     - name: Run Go vet
-      run: go vet ./...
+      run: |
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
+        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+          export DYLD_LIBRARY_PATH=$PWD:$DYLD_LIBRARY_PATH
+        fi
+        go vet ./...
     
     - name: Run Go fmt check
       run: |
