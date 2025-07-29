@@ -1,0 +1,103 @@
+name: Release Go Package
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送以v开头的标签时触发，如v1.0.0
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Build Rust library
+      run: |
+        cargo build --release
+        cp target/release/librust_add_ffi.so ./librust_add_ffi.so
+    
+    - name: Run Go tests
+      run: go test -v ./...
+    
+    - name: Run Go build
+      run: go build -v ./...
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # 获取完整历史记录
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Build cross-platform libraries
+      run: |
+        # Linux
+        cargo build --release
+        mkdir -p dist/linux
+        cp target/release/librust_add_ffi.so dist/linux/
+        
+        # macOS (需要交叉编译工具)
+        rustup target add x86_64-apple-darwin
+        cargo build --release --target x86_64-apple-darwin
+        mkdir -p dist/darwin
+        cp target/x86_64-apple-darwin/release/librust_add_ffi.dylib dist/darwin/
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+        body: |
+          ## 更新内容
+          
+          - 新版本发布
+          - 包含跨平台动态库
+          
+          ## 使用方法
+          
+          ```bash
+          go get github.com/${{ github.repository }}@${{ github.ref }}
+          ```
+    
+    - name: Upload Linux Library
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/linux/librust_add_ffi.so
+        asset_name: librust_add_ffi-linux.so
+        asset_content_type: application/octet-stream
+    
+    - name: Upload macOS Library
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/darwin/librust_add_ffi.dylib
+        asset_name: librust_add_ffi-darwin.dylib
+        asset_content_type: application/octet-stream
